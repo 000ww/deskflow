@@ -146,10 +146,10 @@ jobs:
       - name: Install Qt via aqtinstall
         run: |
           pip install aqtinstall
-          aqt install-qt mac desktop ${{ env.QT_VERSION }} clang_64 --outputdir /opt/qt
-          echo "QT_ROOT_DIR=/opt/qt/${{ env.QT_VERSION }}/clang_64" >> $GITHUB_ENV
-          echo "Qt6_DIR=/opt/qt/${{ env.QT_VERSION }}/clang_64/lib/cmake/Qt6" >> $GITHUB_ENV
-          echo "/opt/qt/${{ env.QT_VERSION }}/clang_64/bin" >> $GITHUB_PATH
+          aqt install-qt mac desktop ${{ env.QT_VERSION }} clang_64 --outputdir $HOME/qt
+          echo "QT_ROOT_DIR=$HOME/qt/${{ env.QT_VERSION }}/clang_64" >> $GITHUB_ENV
+          echo "Qt6_DIR=$HOME/qt/${{ env.QT_VERSION }}/clang_64/lib/cmake/Qt6" >> $GITHUB_ENV
+          echo "$HOME/qt/${{ env.QT_VERSION }}/clang_64/bin" >> $GITHUB_PATH
 
       - name: Configure
         run: |
@@ -193,7 +193,7 @@ jobs:
 
       - name: Install system dependencies
         run: |
-          sudo add-apt-repository -y ppa:ubuntu-desktop/gnome-46
+          sudo add-apt-repository -y ppa:lopin/deskflow
           sudo apt-get update
           sudo apt-get install -y \
             cmake ninja-build g++ \

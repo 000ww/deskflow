@@ -26,38 +26,41 @@ jobs:
           echo "Qt6_DIR=C:\Qt\6.7.0\msvc2019_64\lib\cmake\Qt6" >> $env:GITHUB_ENV
         shell: pwsh
         
-      - name: Install build tools
+      - name: Install dependencies via Chocolatey
         run: |
           # Install ninja
           choco install ninja -y
+          
+          # Install OpenSSL
+          choco install openssl -y
           
           # Install WiX
           dotnet tool install --global wix --version 4.0.5
           echo "$env:USERPROFILE\.dotnet\tools" >> $env:GITHUB_PATH
           
-          # Verify WiX
-          wix --version
-          
           # Install WiX extensions
           wix extension add WixToolset.Util.wixext
           wix extension add WixToolset.Firewall.wixext
-          wix extension list
         shell: pwsh
         
       - name: Setup MSVC
         uses: ilammy/msvc-dev-cmd@v1
         
-      - name: Install vcpkg packages
-        run: vcpkg install openssl:x64-windows gtest:x64-windows
-        shell: bash
-        
       - name: Configure
         run: |
+          # Find OpenSSL
+          $opensslPath = "C:\Program Files\OpenSSL"
+          if (Test-Path $opensslPath) {
+            Write-Host "Found OpenSSL at: $opensslPath"
+            $env:OPENSSL_ROOT_DIR = $opensslPath
+          }
+          
           cmake -S . -B build `
             -G "Visual Studio 17 2022" `
             -A x64 `
             -DCMAKE_PREFIX_PATH="$env:QT_ROOT_DIR" `
             -DQt6_DIR="$env:Qt6_DIR" `
+            -DOPENSSL_ROOT_DIR="$opensslPath" `
             -DBUILD_TESTS=OFF `
             -DBUILD_INSTALLER=ON
         shell: pwsh
@@ -66,65 +69,66 @@ jobs:
         run: cmake --build build --config Release -j $env:NUMBER_OF_PROCESSORS
         shell: pwsh
         
-      - name: Copy OpenSSL DLLs
+      - name: Find and copy OpenSSL DLLs
         run: |
-          $vcpkgBin = "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\bin"
+          # Find OpenSSL DLLs
+          $opensslDlls = @(
+            "C:\Program Files\OpenSSL\bin\libcrypto-3-x64.dll",
+            "C:\Program Files\OpenSSL\bin\libssl-3-x64.dll",
+            "C:\Program Files\OpenSSL-Win64\bin\libcrypto-3-x64.dll",
+            "C:\Program Files\OpenSSL-Win64\bin\libssl-3-x64.dll"
+          )
+          
           $releaseDirs = @(
             "build\bin\Release",
             "build\src\apps\deskflow-core\Release",
             "build\src\apps\deskflow-daemon\Release"
           )
           
-          foreach ($dir in $releaseDirs) {
-            if (Test-Path $dir) {
-              Copy-Item "$vcpkgBin\libcrypto-3-x64.dll" $dir -ErrorAction SilentlyContinue
-              Copy-Item "$vcpkgBin\libssl-3-x64.dll" $dir -ErrorAction SilentlyContinue
-              Write-Host "Copied DLLs to $dir"
+          foreach ($dll in $opensslDlls) {
+            if (Test-Path $dll) {
+              Write-Host "Found OpenSSL DLL: $dll"
+              foreach ($dir in $releaseDirs) {
+                if (Test-Path $dir) {
+                  Copy-Item $dll $dir
+                  Write-Host "Copied to $dir"
+                }
+              }
+              break
             }
           }
         shell: pwsh
         
       - name: Create 7Z package
-        run: |
-          # Only create 7Z, not WiX
-          cpack -G 7Z -C Release --config build/CPackConfig.cmake
+        run: cpack -G 7Z -C Release
         shell: pwsh
-        working-directory: ${{ github.workspace }}
+        working-directory: build
         
-      - name: Create WiX installer (with debug)
+      - name: Create WiX installer
         id: wix
         run: |
           Write-Host "=== Creating WiX installer ==="
-          
-          # Run CPack for WiX only
-          cpack -G WIX -C Release --config build/CPackConfig.cmake 2>&1 | Tee-Object -Variable wixOutput
-          
-          # Check for WiX log
-          Write-Host "=== Checking WiX logs ==="
-          $wixLogPaths = @(
-            "build\_CPack_Packages\win64\WIX\wix.log",
-            "build\_CPack_Packages\WIX\wix.log",
-            "build\wix.log"
-          )
-          
-          foreach ($logPath in $wixLogPaths) {
-            if (Test-Path $logPath) {
-              Write-Host "Found WiX log at: $logPath"
-              Get-Content $logPath
-            }
-          }
-          
-          # List CPack packages directory
-          Write-Host "=== CPack Packages Directory ==="
-          if (Test-Path "build\_CPack_Packages") {
-            Get-ChildItem -Path "build\_CPack_Packages" -Recurse | ForEach-Object {
-              Write-Host $_.FullName
-            }
-          }
+          cpack -G WIX -C Release
         shell: pwsh
+        working-directory: build
         continue-on-error: true
         
-      - name: List all artifacts
+      - name: Check WiX log on failure
+        if: steps.wix.outcome == 'failure'
+        run: |
+          Write-Host "=== WiX Failed - Checking logs ==="
+          Get-ChildItem -Path build -Recurse -Filter "wix.log" | ForEach-Object {
+            Write-Host "Found log: $($_.FullName)"
+            Get-Content $_.FullName
+          }
+          
+          # Also check CPack error output
+          Get-ChildItem -Path build -Recurse -Filter "*.log" | ForEach-Object {
+            Write-Host "Log file: $($_.FullName)"
+          }
+        shell: pwsh
+        
+      - name: List artifacts
         run: |
           Write-Host "=== Build artifacts ==="
           Get-ChildItem -Path build -Include "*.7z","*.msi","*.exe" -Recurse | ForEach-Object {
@@ -140,7 +144,7 @@ jobs:
           path: build/*.7z
           
       - name: Upload WiX installer
-        if: hashFiles('build/*.msi') != ''
+        if: steps.wix.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: deskflow-windows-x64-installer

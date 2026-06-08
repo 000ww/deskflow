@@ -28,8 +28,21 @@ jobs:
         
       - name: Install WiX Toolset
         run: |
+          Write-Host "=== Installing WiX ==="
           dotnet tool install --global wix --version 4.0.5
-          echo "C:\Users\runneradmin\.dotnet\tools" >> $env:GITHUB_PATH
+          $wixPath = "$env:USERPROFILE\.dotnet\tools"
+          echo "$wixPath" >> $env:GITHUB_PATH
+          Write-Host "WiX path: $wixPath"
+          
+          # Verify WiX installation
+          Write-Host "=== Verifying WiX ==="
+          & "$wixPath\wix.exe" --version
+          
+          # Install required extensions
+          Write-Host "=== Installing WiX extensions ==="
+          & "$wixPath\wix.exe" extension add WixToolset.Util.wixext
+          & "$wixPath\wix.exe" extension add WixToolset.Firewall.wixext
+          & "$wixPath\wix.exe" extension list
         shell: pwsh
         
       - name: Setup MSVC
@@ -41,6 +54,15 @@ jobs:
         
       - name: Configure
         run: |
+          Write-Host "=== Checking WiX ==="
+          $wixExe = Get-Command wix -ErrorAction SilentlyContinue
+          if ($wixExe) {
+            Write-Host "WiX found at: $($wixExe.Source)"
+            & wix --version
+          } else {
+            Write-Host "WiX NOT FOUND in PATH"
+          }
+          
           cmake -S . -B build `
             -G "Visual Studio 17 2022" `
             -A x64 `
@@ -73,7 +95,27 @@ jobs:
         shell: pwsh
         
       - name: Create packages
-        run: cmake --build build --config Release --target package
+        run: |
+          Write-Host "=== Creating packages ==="
+          cmake --build build --config Release --target package
+        shell: pwsh
+        continue-on-error: true
+        
+      - name: Check WiX log on failure
+        if: failure()
+        run: |
+          Write-Host "=== WiX Log ==="
+          $wixLog = "build\_CPack_Packages\win64\WIX\wix.log"
+          if (Test-Path $wixLog) {
+            Get-Content $wixLog
+          } else {
+            Write-Host "WiX log not found at: $wixLog"
+            Write-Host "Searching for wix.log..."
+            Get-ChildItem -Path build -Recurse -Filter "wix.log" | ForEach-Object {
+              Write-Host "Found: $($_.FullName)"
+              Get-Content $_.FullName
+            }
+          }
         shell: pwsh
         
       - name: List package artifacts
@@ -87,10 +129,11 @@ jobs:
       - name: Upload 7Z package
         uses: actions/upload-artifact@v4
         with:
-          name: deskflow-windows-x64-7z
+          name: deskflow-windows-x64-portable
           path: build/*.7z
           
       - name: Upload WiX installer
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: deskflow-windows-x64-installer

@@ -58,7 +58,6 @@ jobs:
           host: 'windows'
           target: 'desktop'
           arch: 'win64_msvc2019_64'
-          modules: 'qtwidgets qtnetwork'
           cache: true
           
       - name: Setup MSVC
@@ -71,12 +70,17 @@ jobs:
         
       - name: Configure
         run: |
+          $qt6Dir = "$env:QT_ROOT_DIR\lib\cmake\Qt6"
+          echo "Qt6_DIR = $qt6Dir"
+          echo "VCPKG_ROOT = $env:VCPKG_INSTALLATION_ROOT"
+          
           cmake -S . -B build `
             -G "Visual Studio 17 2022" `
             -A x64 `
-            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT\scripts\buildsystems\vcpkg.cmake" `
             -DVCPKG_TARGET_TRIPLET=x64-windows `
-            -DQt6_DIR="$env:QT_ROOT_DIR/lib/cmake/Qt6"
+            -DCMAKE_PREFIX_PATH="$env:QT_ROOT_DIR" `
+            -DQt6_DIR="$qt6Dir"
         shell: pwsh
         
       - name: Build

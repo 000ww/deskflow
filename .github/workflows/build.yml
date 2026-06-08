@@ -183,26 +183,36 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             cmake ninja-build g++ \
-            qt6-base-dev qt6-tools-dev qt6-tools-dev-tools \
-            qt6-l10n-tools \
             libssl-dev \
             libgl1-mesa-dev \
             libx11-dev libxtst-dev libxkbfile-dev \
             libxrandr-dev libxinerama-dev libxi-dev \
             libxext-dev libice-dev libsm-dev \
             libglib2.0-dev libxkbcommon-dev \
-            pkg-config
+            libxkbcommon-x11-0 \
+            pkg-config \
+            libegl1 libopengl0
+
+      - name: Install Qt via aqtinstall
+        run: |
+          pip install aqtinstall
+          aqt install-qt linux desktop ${{ env.QT_VERSION }} linux_gcc_64 --outputdir /opt/qt
+          echo "QT_ROOT_DIR=/opt/qt/${{ env.QT_VERSION }}/gcc_64" >> $GITHUB_ENV
+          echo "Qt6_DIR=/opt/qt/${{ env.QT_VERSION }}/gcc_64/lib/cmake/Qt6" >> $GITHUB_ENV
+          echo "/opt/qt/${{ env.QT_VERSION }}/gcc_64/bin" >> $GITHUB_PATH
 
       - name: Configure
         run: |
           cmake -S . -B build \
             -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR" \
+            -DQt6_DIR="$Qt6_DIR" \
             -DBUILD_TESTS=OFF \
             -DBUILD_INSTALLER=ON
 

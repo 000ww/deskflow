@@ -129,7 +129,7 @@ jobs:
           path: build/*.msi
 
   # ============================================================
-  # macOS (arm64 + x64 universal)
+  # macOS
   # ============================================================
   build-macos:
     name: macOS
@@ -139,17 +139,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install dependencies via Homebrew
+      - name: Install system dependencies
         run: |
-          brew install qt openssl cmake ninja
+          brew install openssl cmake ninja
+
+      - name: Install Qt via aqtinstall
+        run: |
+          pip install aqtinstall
+          aqt install-qt mac desktop ${{ env.QT_VERSION }} clang_64 --outputdir /opt/qt
+          echo "QT_ROOT_DIR=/opt/qt/${{ env.QT_VERSION }}/clang_64" >> $GITHUB_ENV
+          echo "Qt6_DIR=/opt/qt/${{ env.QT_VERSION }}/clang_64/lib/cmake/Qt6" >> $GITHUB_ENV
+          echo "/opt/qt/${{ env.QT_VERSION }}/clang_64/bin" >> $GITHUB_PATH
 
       - name: Configure
         run: |
           cmake -S . -B build \
             -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_PREFIX_PATH="$(brew --prefix qt)" \
-            -DQt6_DIR="$(brew --prefix qt)/lib/cmake/Qt6" \
+            -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR" \
+            -DQt6_DIR="$Qt6_DIR" \
             -DOPENSSL_ROOT_DIR="$(brew --prefix openssl@3)" \
             -DBUILD_TESTS=OFF \
             -DBUILD_INSTALLER=ON
@@ -185,6 +193,7 @@ jobs:
 
       - name: Install system dependencies
         run: |
+          sudo add-apt-repository -y ppa:ubuntu-desktop/gnome-46
           sudo apt-get update
           sudo apt-get install -y \
             cmake ninja-build g++ \
@@ -195,6 +204,7 @@ jobs:
             libxext-dev libice-dev libsm-dev \
             libglib2.0-dev libxkbcommon-dev \
             libxkbcommon-x11-0 \
+            libei-dev libportal-dev \
             pkg-config \
             libegl1 libopengl0
 

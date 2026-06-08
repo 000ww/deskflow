@@ -35,35 +35,33 @@ jobs:
         
       - name: Configure
         run: |
-          Write-Host "QT_ROOT_DIR = $env:QT_ROOT_DIR"
-          Write-Host "Qt6_DIR = $env:Qt6_DIR"
-          Write-Host "VCPKG_INSTALLATION_ROOT = $env:VCPKG_INSTALLATION_ROOT"
-          
-          # Find Qt6Config.cmake
-          $qt6ConfigPath = Join-Path $env:Qt6_DIR "Qt6Config.cmake"
-          Write-Host "Looking for: $qt6ConfigPath"
-          if (Test-Path $qt6ConfigPath) {
-            Write-Host "FOUND Qt6Config.cmake"
-          } else {
-            Write-Host "NOT FOUND. Searching..."
-            Get-ChildItem -Path "C:\Qt" -Recurse -Filter "Qt6Config.cmake" -ErrorAction SilentlyContinue | ForEach-Object {
-              Write-Host "Found at: $($_.FullName)"
-            }
-          }
-          
           cmake -S . -B build `
             -G "Visual Studio 17 2022" `
             -A x64 `
             -DCMAKE_PREFIX_PATH="$env:QT_ROOT_DIR" `
-            -DQt6_DIR="$env:Qt6_DIR"
+            -DQt6_DIR="$env:Qt6_DIR" `
+            -DBUILD_TESTS=OFF
         shell: pwsh
         
       - name: Build
         run: cmake --build build --config Release -j $env:NUMBER_OF_PROCESSORS
         shell: pwsh
         
+      - name: Create installer
+        run: cmake --build build --config Release --target package
+        shell: pwsh
+        
+      - name: List build artifacts
+        run: |
+          Get-ChildItem -Path build -Recurse -Include "*.exe" | ForEach-Object {
+            Write-Host $_.FullName
+          }
+        shell: pwsh
+        
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: deskflow-windows-x64
-          path: build/Release/*.exe
+          path: |
+            build/Release/*.exe
+            build/*.exe

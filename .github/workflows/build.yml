@@ -146,18 +146,15 @@ jobs:
       - name: Install Qt via aqtinstall
         run: |
           pip install aqtinstall
-          aqt install-qt mac desktop ${{ env.QT_VERSION }} clang_64 --outputdir $HOME/qt
-          echo "QT_ROOT_DIR=$HOME/qt/${{ env.QT_VERSION }}/clang_64" >> $GITHUB_ENV
-          echo "Qt6_DIR=$HOME/qt/${{ env.QT_VERSION }}/clang_64/lib/cmake/Qt6" >> $GITHUB_ENV
-          echo "$HOME/qt/${{ env.QT_VERSION }}/clang_64/bin" >> $GITHUB_PATH
-
-      - name: Debug Qt paths
-        run: |
-          echo "HOME=$HOME"
-          echo "QT_ROOT_DIR=$QT_ROOT_DIR"
-          echo "Qt6_DIR=$Qt6_DIR"
-          ls -la $HOME/qt/${{ env.QT_VERSION }}/clang_64/ 2>/dev/null || echo "Qt dir not found"
-          find $HOME/qt -name "Qt6Config.cmake" 2>/dev/null || echo "Qt6Config.cmake not found"
+          QT_DIR="$HOME/qt/${{ env.QT_VERSION }}/clang_64"
+          aqt install-qt mac desktop ${{ env.QT_VERSION }} clang_64 --outputdir "$HOME/qt"
+          echo "QT_ROOT_DIR=$QT_DIR" >> "$GITHUB_ENV"
+          echo "Qt6_DIR=$QT_DIR/lib/cmake/Qt6" >> "$GITHUB_ENV"
+          echo "$QT_DIR/bin" >> "$GITHUB_PATH"
+          echo "Installed Qt to: $QT_DIR"
+          ls "$QT_DIR/lib/cmake/Qt6/" || echo "Qt6 cmake dir not found"
+          # Try alternate path
+          find "$HOME/qt" -name "Qt6Config.cmake" -type f 2>/dev/null || echo "Qt6Config.cmake not found anywhere"
 
       - name: Configure
         run: |

@@ -28,24 +28,27 @@ jobs:
         
       - name: Install build tools
         run: |
-          # Install ninja (required by vcpkg)
+          # Install ninja
           choco install ninja -y
           
           # Install WiX
           dotnet tool install --global wix --version 4.0.5
           echo "$env:USERPROFILE\.dotnet\tools" >> $env:GITHUB_PATH
           
+          # Verify WiX
+          wix --version
+          
           # Install WiX extensions
           wix extension add WixToolset.Util.wixext
           wix extension add WixToolset.Firewall.wixext
+          wix extension list
         shell: pwsh
         
       - name: Setup MSVC
         uses: ilammy/msvc-dev-cmd@v1
         
       - name: Install vcpkg packages
-        run: |
-          vcpkg install openssl:x64-windows gtest:x64-windows
+        run: vcpkg install openssl:x64-windows gtest:x64-windows
         shell: bash
         
       - name: Configure
@@ -81,17 +84,51 @@ jobs:
           }
         shell: pwsh
         
-      - name: Create packages
-        run: cmake --build build --config Release --target package
-        shell: pwsh
-        
-      - name: Check WiX log on failure
-        if: failure()
+      - name: Create 7Z package
         run: |
-          Write-Host "=== WiX Log ==="
-          $wixLog = "build\_CPack_Packages\win64\WIX\wix.log"
-          if (Test-Path $wixLog) {
-            Get-Content $wixLog
+          # Only create 7Z, not WiX
+          cpack -G 7Z -C Release --config build/CPackConfig.cmake
+        shell: pwsh
+        working-directory: ${{ github.workspace }}
+        
+      - name: Create WiX installer (with debug)
+        id: wix
+        run: |
+          Write-Host "=== Creating WiX installer ==="
+          
+          # Run CPack for WiX only
+          cpack -G WIX -C Release --config build/CPackConfig.cmake 2>&1 | Tee-Object -Variable wixOutput
+          
+          # Check for WiX log
+          Write-Host "=== Checking WiX logs ==="
+          $wixLogPaths = @(
+            "build\_CPack_Packages\win64\WIX\wix.log",
+            "build\_CPack_Packages\WIX\wix.log",
+            "build\wix.log"
+          )
+          
+          foreach ($logPath in $wixLogPaths) {
+            if (Test-Path $logPath) {
+              Write-Host "Found WiX log at: $logPath"
+              Get-Content $logPath
+            }
+          }
+          
+          # List CPack packages directory
+          Write-Host "=== CPack Packages Directory ==="
+          if (Test-Path "build\_CPack_Packages") {
+            Get-ChildItem -Path "build\_CPack_Packages" -Recurse | ForEach-Object {
+              Write-Host $_.FullName
+            }
+          }
+        shell: pwsh
+        continue-on-error: true
+        
+      - name: List all artifacts
+        run: |
+          Write-Host "=== Build artifacts ==="
+          Get-ChildItem -Path build -Include "*.7z","*.msi","*.exe" -Recurse | ForEach-Object {
+            Write-Host "$($_.FullName) ($([math]::Round($_.Length/1MB, 2)) MB)"
           }
         shell: pwsh
         
@@ -103,7 +140,7 @@ jobs:
           path: build/*.7z
           
       - name: Upload WiX installer
-        if: success()
+        if: hashFiles('build/*.msi') != ''
         uses: actions/upload-artifact@v4
         with:
           name: deskflow-windows-x64-installer

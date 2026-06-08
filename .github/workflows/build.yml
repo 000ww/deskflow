@@ -26,6 +26,12 @@ jobs:
           echo "Qt6_DIR=C:\Qt\6.7.0\msvc2019_64\lib\cmake\Qt6" >> $env:GITHUB_ENV
         shell: pwsh
         
+      - name: Install WiX Toolset
+        run: |
+          dotnet tool install --global wix --version 4.0.5
+          echo "C:\Users\runneradmin\.dotnet\tools" >> $env:GITHUB_PATH
+        shell: pwsh
+        
       - name: Setup MSVC
         uses: ilammy/msvc-dev-cmd@v1
         
@@ -41,47 +47,51 @@ jobs:
             -DCMAKE_PREFIX_PATH="$env:QT_ROOT_DIR" `
             -DQt6_DIR="$env:Qt6_DIR" `
             -DBUILD_TESTS=OFF `
-            -DBUILD_INSTALLER=OFF
+            -DBUILD_INSTALLER=ON
         shell: pwsh
         
       - name: Build
         run: cmake --build build --config Release -j $env:NUMBER_OF_PROCESSORS
         shell: pwsh
         
-      - name: Find and copy OpenSSL DLLs
+      - name: Copy OpenSSL DLLs
         run: |
-          # Find OpenSSL DLLs in vcpkg
           $vcpkgBin = "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\bin"
-          Write-Host "Looking for OpenSSL DLLs in: $vcpkgBin"
+          $releaseDirs = @(
+            "build\bin\Release",
+            "build\src\apps\deskflow-core\Release",
+            "build\src\apps\deskflow-daemon\Release"
+          )
           
-          # Copy DLLs to build output
-          $buildBin = "build\bin\Release"
-          if (Test-Path $vcpkgBin) {
-            Copy-Item "$vcpkgBin\libcrypto-3-x64.dll" $buildBin -ErrorAction SilentlyContinue
-            Copy-Item "$vcpkgBin\libssl-3-x64.dll" $buildBin -ErrorAction SilentlyContinue
-            Write-Host "Copied OpenSSL DLLs to $buildBin"
-          }
-          
-          # Also copy to deskflow-core location
-          $coreDir = "build\src\apps\deskflow-core\Release"
-          if (Test-Path $coreDir) {
-            Copy-Item "$vcpkgBin\libcrypto-3-x64.dll" $coreDir -ErrorAction SilentlyContinue
-            Copy-Item "$vcpkgBin\libssl-3-x64.dll" $coreDir -ErrorAction SilentlyContinue
-          }
-          
-          # List all exe files
-          Write-Host "=== Built executables ==="
-          Get-ChildItem -Path build -Recurse -Include "*.exe" | ForEach-Object {
-            Write-Host $_.FullName
+          foreach ($dir in $releaseDirs) {
+            if (Test-Path $dir) {
+              Copy-Item "$vcpkgBin\libcrypto-3-x64.dll" $dir -ErrorAction SilentlyContinue
+              Copy-Item "$vcpkgBin\libssl-3-x64.dll" $dir -ErrorAction SilentlyContinue
+              Write-Host "Copied DLLs to $dir"
+            }
           }
         shell: pwsh
         
-      - name: Upload artifact
+      - name: Create packages
+        run: cmake --build build --config Release --target package
+        shell: pwsh
+        
+      - name: List package artifacts
+        run: |
+          Write-Host "=== Package files ==="
+          Get-ChildItem -Path build -Include "*.7z","*.msi","*.exe" -Recurse | ForEach-Object {
+            Write-Host "$($_.FullName) ($([math]::Round($_.Length/1MB, 2)) MB)"
+          }
+        shell: pwsh
+        
+      - name: Upload 7Z package
         uses: actions/upload-artifact@v4
         with:
-          name: deskflow-windows-x64
-          path: |
-            build/bin/Release/*.exe
-            build/bin/Release/*.dll
-            build/src/apps/deskflow-core/Release/*.exe
-            build/src/apps/deskflow-core/Release/*.dll
+          name: deskflow-windows-x64-7z
+          path: build/*.7z
+          
+      - name: Upload WiX installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: deskflow-windows-x64-installer
+          path: build/*.msi

@@ -45,10 +45,8 @@ jobs:
         
       - name: Install vcpkg packages
         run: |
-          # Use system vcpkg, not the one from MSVC
-          $env:VCPKG_ROOT = "C:\vcpkg"
-          vcpkg install openssl:x64-windows gtest:x64-windows --x-manifest-root=.
-        shell: pwsh
+          vcpkg install openssl:x64-windows gtest:x64-windows
+        shell: bash
         
       - name: Configure
         run: |
@@ -67,7 +65,7 @@ jobs:
         
       - name: Copy OpenSSL DLLs
         run: |
-          $vcpkgBin = "C:\vcpkg\installed\x64-windows\bin"
+          $vcpkgBin = "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\bin"
           $releaseDirs = @(
             "build\bin\Release",
             "build\src\apps\deskflow-core\Release",

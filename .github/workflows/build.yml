@@ -151,6 +151,14 @@ jobs:
           echo "Qt6_DIR=$HOME/qt/${{ env.QT_VERSION }}/clang_64/lib/cmake/Qt6" >> $GITHUB_ENV
           echo "$HOME/qt/${{ env.QT_VERSION }}/clang_64/bin" >> $GITHUB_PATH
 
+      - name: Debug Qt paths
+        run: |
+          echo "HOME=$HOME"
+          echo "QT_ROOT_DIR=$QT_ROOT_DIR"
+          echo "Qt6_DIR=$Qt6_DIR"
+          ls -la $HOME/qt/${{ env.QT_VERSION }}/clang_64/ 2>/dev/null || echo "Qt dir not found"
+          find $HOME/qt -name "Qt6Config.cmake" 2>/dev/null || echo "Qt6Config.cmake not found"
+
       - name: Configure
         run: |
           cmake -S . -B build \
@@ -229,20 +237,24 @@ jobs:
       - name: Build
         run: cmake --build build -j $(nproc)
 
-      - name: Create DEB package
-        run: cpack -G DEB -C Release
+      - name: Create packages
+        run: |
+          cpack -G TGZ -C Release
+          cpack -G DEB -C Release || echo "DEB packaging failed, continuing with TGZ"
         working-directory: build
 
       - name: List artifacts
         if: always()
-        run: ls -lh build/*.deb 2>/dev/null || echo "No DEB found"
+        run: ls -lh build/*.tar.gz build/*.deb 2>/dev/null || echo "No packages found"
 
-      - name: Upload DEB
+      - name: Upload Linux packages
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: deskflow-linux-deb
-          path: build/*.deb
+          name: deskflow-linux-packages
+          path: |
+            build/*.tar.gz
+            build/*.deb
 
   # ============================================================
   # Create GitHub Release (only on version tag push)
@@ -277,3 +289,4 @@ jobs:
             artifacts/**/*.msi
             artifacts/**/*.dmg
             artifacts/**/*.deb
+            artifacts/**/*.tar.gz

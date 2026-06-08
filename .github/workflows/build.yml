@@ -26,43 +26,32 @@ jobs:
           echo "Qt6_DIR=C:\Qt\6.7.0\msvc2019_64\lib\cmake\Qt6" >> $env:GITHUB_ENV
         shell: pwsh
         
-      - name: Install WiX Toolset
+      - name: Install build tools
         run: |
-          Write-Host "=== Installing WiX ==="
+          # Install ninja (required by vcpkg)
+          choco install ninja -y
+          
+          # Install WiX
           dotnet tool install --global wix --version 4.0.5
-          $wixPath = "$env:USERPROFILE\.dotnet\tools"
-          echo "$wixPath" >> $env:GITHUB_PATH
-          Write-Host "WiX path: $wixPath"
+          echo "$env:USERPROFILE\.dotnet\tools" >> $env:GITHUB_PATH
           
-          # Verify WiX installation
-          Write-Host "=== Verifying WiX ==="
-          & "$wixPath\wix.exe" --version
-          
-          # Install required extensions
-          Write-Host "=== Installing WiX extensions ==="
-          & "$wixPath\wix.exe" extension add WixToolset.Util.wixext
-          & "$wixPath\wix.exe" extension add WixToolset.Firewall.wixext
-          & "$wixPath\wix.exe" extension list
+          # Install WiX extensions
+          wix extension add WixToolset.Util.wixext
+          wix extension add WixToolset.Firewall.wixext
         shell: pwsh
         
       - name: Setup MSVC
         uses: ilammy/msvc-dev-cmd@v1
         
       - name: Install vcpkg packages
-        run: vcpkg install openssl:x64-windows gtest:x64-windows
-        shell: bash
+        run: |
+          # Use system vcpkg, not the one from MSVC
+          $env:VCPKG_ROOT = "C:\vcpkg"
+          vcpkg install openssl:x64-windows gtest:x64-windows --x-manifest-root=.
+        shell: pwsh
         
       - name: Configure
         run: |
-          Write-Host "=== Checking WiX ==="
-          $wixExe = Get-Command wix -ErrorAction SilentlyContinue
-          if ($wixExe) {
-            Write-Host "WiX found at: $($wixExe.Source)"
-            & wix --version
-          } else {
-            Write-Host "WiX NOT FOUND in PATH"
-          }
-          
           cmake -S . -B build `
             -G "Visual Studio 17 2022" `
             -A x64 `
@@ -78,7 +67,7 @@ jobs:
         
       - name: Copy OpenSSL DLLs
         run: |
-          $vcpkgBin = "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\bin"
+          $vcpkgBin = "C:\vcpkg\installed\x64-windows\bin"
           $releaseDirs = @(
             "build\bin\Release",
             "build\src\apps\deskflow-core\Release",
@@ -95,11 +84,8 @@ jobs:
         shell: pwsh
         
       - name: Create packages
-        run: |
-          Write-Host "=== Creating packages ==="
-          cmake --build build --config Release --target package
+        run: cmake --build build --config Release --target package
         shell: pwsh
-        continue-on-error: true
         
       - name: Check WiX log on failure
         if: failure()
@@ -108,25 +94,11 @@ jobs:
           $wixLog = "build\_CPack_Packages\win64\WIX\wix.log"
           if (Test-Path $wixLog) {
             Get-Content $wixLog
-          } else {
-            Write-Host "WiX log not found at: $wixLog"
-            Write-Host "Searching for wix.log..."
-            Get-ChildItem -Path build -Recurse -Filter "wix.log" | ForEach-Object {
-              Write-Host "Found: $($_.FullName)"
-              Get-Content $_.FullName
-            }
-          }
-        shell: pwsh
-        
-      - name: List package artifacts
-        run: |
-          Write-Host "=== Package files ==="
-          Get-ChildItem -Path build -Include "*.7z","*.msi","*.exe" -Recurse | ForEach-Object {
-            Write-Host "$($_.FullName) ($([math]::Round($_.Length/1MB, 2)) MB)"
           }
         shell: pwsh
         
       - name: Upload 7Z package
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: deskflow-windows-x64-portable

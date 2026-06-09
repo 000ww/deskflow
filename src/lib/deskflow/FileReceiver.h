@@ -7,6 +7,7 @@
 #pragma once
 
 #include <cstdint>
+#include <fstream>
 #include <functional>
 #include <string>
 

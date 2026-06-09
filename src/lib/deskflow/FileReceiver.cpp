@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: GPL-2.0-only WITH LicenseRef-OpenSSL-Exception
  */
 
+#include <filesystem>
+#include <fstream>
+
 #include "deskflow/FileReceiver.h"
 
 #include "base/Log.h"
-
-#include <filesystem>
-#include <fstream>
 
 FileReceiver::FileReceiver(uint32_t transferId, const std::string &downloadDir)
     : m_transferId(transferId),

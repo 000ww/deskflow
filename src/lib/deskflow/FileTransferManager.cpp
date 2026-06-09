@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: GPL-2.0-only WITH LicenseRef-OpenSSL-Exception
  */
 
+#include <filesystem>
+
 #include "deskflow/FileTransferManager.h"
 
 #include "base/Event.h"
@@ -11,8 +13,6 @@
 #include "base/Log.h"
 #include "deskflow/FileTransferChunk.h"
 #include "deskflow/ProtocolTypes.h"
-
-#include <filesystem>
 
 FileTransferManager &FileTransferManager::instance()
 {

@@ -4,6 +4,9 @@
  * SPDX-License-Identifier: GPL-2.0-only WITH LicenseRef-OpenSSL-Exception
  */
 
+#include <filesystem>
+#include <fstream>
+
 #include "deskflow/FileSender.h"
 
 #include "base/Event.h"
@@ -11,9 +14,6 @@
 #include "base/Log.h"
 #include "deskflow/FileTransferChunk.h"
 #include "deskflow/ProtocolTypes.h"
-
-#include <filesystem>
-#include <fstream>
 
 FileSender::FileSender(uint32_t transferId, IEventQueue *events, void *eventTarget)
     : m_transferId(transferId),

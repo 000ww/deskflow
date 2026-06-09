@@ -12,19 +12,20 @@
 #include "deskflow/FileTransferChunk.h"
 #include "deskflow/ProtocolTypes.h"
 
+#include <filesystem>
+
 FileTransferManager &FileTransferManager::instance()
 {
   static FileTransferManager instance;
   return instance;
 }
 
-void FileTransferManager::init(IEventQueue *events, const std::filesystem::path &downloadDir)
+void FileTransferManager::init(IEventQueue *events, const std::string &downloadDir)
 {
   std::lock_guard<std::mutex> lock(m_mutex);
   m_events = events;
   m_downloadDir = downloadDir;
 
-  // Create download directory if it doesn't exist
   std::error_code ec;
   std::filesystem::create_directories(downloadDir, ec);
   if (ec) {
@@ -35,8 +36,7 @@ void FileTransferManager::init(IEventQueue *events, const std::filesystem::path 
 }
 
 uint32_t FileTransferManager::sendFiles(
-    const std::vector<std::filesystem::path> &files, const std::filesystem::path &baseDir,
-    deskflow::IStream *stream, void *eventTarget
+    const std::vector<std::string> &files, const std::string &baseDir, deskflow::IStream *stream, void *eventTarget
 )
 {
   std::lock_guard<std::mutex> lock(m_mutex);
@@ -55,10 +55,7 @@ uint32_t FileTransferManager::sendFiles(
       "file transfer: starting send, id=%d, files=%d, bytes=%llu", transferId, sender->totalFiles(), sender->totalBytes()
   );
 
-  // Store the sender before starting
   m_senders[transferId] = std::move(sender);
-
-  // Start sending
   m_senders[transferId]->start();
 
   return transferId;
@@ -74,14 +71,12 @@ void FileTransferManager::handleDragInfo(
       sourceScreen.c_str()
   );
 
-  // Check if we have a request callback
   if (!m_requestCallback) {
     LOG_WARN("file transfer: no request callback set, rejecting transfer");
     rejectTransfer(transferId, "No request callback");
     return;
   }
 
-  // Store pending transfer
   PendingTransfer pending;
   pending.transferId = transferId;
   pending.fileCount = fileCount;
@@ -95,7 +90,6 @@ void FileTransferManager::handleDragInfo(
     m_pendingTransfers[transferId] = pending;
   }
 
-  // Call the request callback (this will show UI)
   bool accepted = m_requestCallback(transferId, sourceScreen, fileCount, totalSize);
 
   if (accepted) {
@@ -109,7 +103,6 @@ bool FileTransferManager::handleFileChunk(uint32_t transferId, uint8_t mark, con
 {
   std::lock_guard<std::mutex> lock(m_mutex);
 
-  // Find the receiver
   auto it = m_receivers.find(transferId);
   if (it == m_receivers.end()) {
     LOG_WARN("file transfer: received chunk for unknown transfer id=%d", transferId);
@@ -130,13 +123,11 @@ bool FileTransferManager::handleFileChunk(uint32_t transferId, uint8_t mark, con
 
   case FileChunkType::TransferEnd:
     receiver->onTransferEnd();
-    // Clean up receiver
     m_receivers.erase(it);
     return true;
 
   case FileChunkType::TransferCancel:
     receiver->onTransferCancel(data);
-    // Clean up receiver
     m_receivers.erase(it);
     return true;
 
@@ -158,11 +149,9 @@ bool FileTransferManager::acceptTransfer(uint32_t transferId)
 
   auto &pending = pendingIt->second;
 
-  // Create receiver
   auto receiver = std::make_unique<FileReceiver>(transferId, m_downloadDir);
   m_receivers[transferId] = std::move(receiver);
 
-  // Remove from pending
   m_pendingTransfers.erase(pendingIt);
 
   LOG_DEBUG("file transfer: accepted transfer id=%d", transferId);
@@ -178,7 +167,6 @@ void FileTransferManager::rejectTransfer(uint32_t transferId, const std::string 
     m_pendingTransfers.erase(pendingIt);
   }
 
-  // Send cancel message
   auto *chunk = FileTransferChunk::transferCancel(transferId, reason);
   m_events->addEvent(Event(EventTypes::FileTransferSending, nullptr, chunk));
 
@@ -189,7 +177,6 @@ void FileTransferManager::cancelTransfer(uint32_t transferId, const std::string 
 {
   std::lock_guard<std::mutex> lock(m_mutex);
 
-  // Check senders
   auto senderIt = m_senders.find(transferId);
   if (senderIt != m_senders.end()) {
     senderIt->second->cancel(reason);
@@ -197,7 +184,6 @@ void FileTransferManager::cancelTransfer(uint32_t transferId, const std::string 
     return;
   }
 
-  // Check receivers
   auto receiverIt = m_receivers.find(transferId);
   if (receiverIt != m_receivers.end()) {
     receiverIt->second->onTransferCancel(reason);
@@ -222,12 +208,11 @@ uint32_t FileTransferManager::nextTransferId()
   return m_nextTransferId++;
 }
 
-void FileTransferManager::setDownloadDir(const std::filesystem::path &dir)
+void FileTransferManager::setDownloadDir(const std::string &dir)
 {
   std::lock_guard<std::mutex> lock(m_mutex);
   m_downloadDir = dir;
 
-  // Create directory if it doesn't exist
   std::error_code ec;
   std::filesystem::create_directories(dir, ec);
   if (ec) {
@@ -239,7 +224,6 @@ void FileTransferManager::processEvents()
 {
   std::lock_guard<std::mutex> lock(m_mutex);
 
-  // Process senders - send one chunk per sender per call
   for (auto it = m_senders.begin(); it != m_senders.end();) {
     auto *sender = it->second.get();
 

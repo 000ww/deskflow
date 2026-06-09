@@ -12,6 +12,7 @@
 #include "deskflow/FileTransferChunk.h"
 #include "deskflow/ProtocolTypes.h"
 
+#include <filesystem>
 #include <fstream>
 
 FileSender::FileSender(uint32_t transferId, IEventQueue *events, void *eventTarget)
@@ -21,9 +22,7 @@ FileSender::FileSender(uint32_t transferId, IEventQueue *events, void *eventTarg
 {
 }
 
-void FileSender::queueFiles(
-    const std::vector<std::filesystem::path> &paths, const std::filesystem::path &baseDir
-)
+void FileSender::queueFiles(const std::vector<std::string> &paths, const std::string &baseDir)
 {
   for (const auto &path : paths) {
     collectFiles(path, baseDir);
@@ -31,34 +30,34 @@ void FileSender::queueFiles(
   m_totalFiles = static_cast<uint32_t>(m_fileQueue.size());
 }
 
-void FileSender::collectFiles(const std::filesystem::path &path, const std::filesystem::path &baseDir)
+void FileSender::collectFiles(const std::string &path, const std::string &baseDir)
 {
   std::error_code ec;
-  if (!std::filesystem::exists(path, ec)) {
+  std::filesystem::path fsPath(path);
+  if (!std::filesystem::exists(fsPath, ec)) {
     LOG_WARN("file transfer: path does not exist: %s", path.c_str());
     return;
   }
 
   FileTransferInfo info;
   info.absolutePath = path;
-  info.relativePath = std::filesystem::relative(path, baseDir, ec).string();
+  info.relativePath = std::filesystem::relative(fsPath, baseDir, ec).string();
   if (ec) {
     LOG_WARN("file transfer: cannot compute relative path for %s: %s", path.c_str(), ec.message().c_str());
-    info.relativePath = path.filename().string();
+    info.relativePath = fsPath.filename().string();
   }
 
-  if (std::filesystem::is_directory(path, ec)) {
+  if (std::filesystem::is_directory(fsPath, ec)) {
     info.isDirectory = true;
     info.size = 0;
     m_fileQueue.push(info);
 
-    // Recursively collect files in directory
-    for (const auto &entry : std::filesystem::directory_iterator(path, ec)) {
-      collectFiles(entry.path(), baseDir);
+    for (const auto &entry : std::filesystem::directory_iterator(fsPath, ec)) {
+      collectFiles(entry.path().string(), baseDir);
     }
   } else {
     info.isDirectory = false;
-    info.size = std::filesystem::file_size(path, ec);
+    info.size = std::filesystem::file_size(fsPath, ec);
     if (ec) {
       LOG_WARN("file transfer: cannot get file size for %s: %s", path.c_str(), ec.message().c_str());
       info.size = 0;
@@ -77,9 +76,7 @@ void FileSender::start()
 
   sendDragInfo();
 
-  // Start sending the first file
   if (!openNextFile()) {
-    // No files to send, send transfer end
     auto *chunk = FileTransferChunk::transferEnd(m_transferId);
     m_events->addEvent(Event(EventTypes::FileTransferSending, m_eventTarget, chunk));
     m_complete = true;
@@ -92,7 +89,6 @@ void FileSender::start()
 
 bool FileSender::openNextFile()
 {
-  // Close current file if open
   if (m_currentFile.is_open()) {
     m_currentFile.close();
   }
@@ -102,7 +98,6 @@ bool FileSender::openNextFile()
     m_fileQueue.pop();
 
     if (m_currentFileInfo.isDirectory) {
-      // Directories don't need data transfer, just continue
       continue;
     }
 
@@ -114,7 +109,6 @@ bool FileSender::openNextFile()
 
     m_currentFileBytesSent = 0;
 
-    // Send file start chunk
     auto *chunk = FileTransferChunk::fileStart(m_transferId, m_currentFileInfo.relativePath);
     m_events->addEvent(Event(EventTypes::FileTransferSending, m_eventTarget, chunk));
 
@@ -132,9 +126,7 @@ bool FileSender::sendNextChunk()
   }
 
   if (!m_currentFile.is_open()) {
-    // Try to open next file
     if (!openNextFile()) {
-      // No more files, send transfer end
       auto *chunk = FileTransferChunk::transferEnd(m_transferId);
       m_events->addEvent(Event(EventTypes::FileTransferSending, m_eventTarget, chunk));
       m_complete = true;
@@ -146,13 +138,11 @@ bool FileSender::sendNextChunk()
     }
   }
 
-  // Read chunk from file
   char buffer[kChunkSize];
   m_currentFile.read(buffer, kChunkSize);
   size_t bytesRead = static_cast<size_t>(m_currentFile.gcount());
 
   if (bytesRead > 0) {
-    // Send data chunk
     std::string data(buffer, bytesRead);
     auto *chunk = FileTransferChunk::fileData(m_transferId, data);
     m_events->addEvent(Event(EventTypes::FileTransferSending, m_eventTarget, chunk));
@@ -160,15 +150,12 @@ bool FileSender::sendNextChunk()
     m_currentFileBytesSent += bytesRead;
     m_bytesSent += bytesRead;
 
-    // Report progress
     if (m_progressCallback) {
       m_progressCallback(m_currentFileBytesSent, m_currentFileInfo.size, m_filesCompleted, m_totalFiles);
     }
   }
 
-  // Check if file is complete
   if (m_currentFile.eof() || m_currentFileBytesSent >= m_currentFileInfo.size) {
-    // Send file end chunk
     auto *chunk = FileTransferChunk::fileEnd(m_transferId);
     m_events->addEvent(Event(EventTypes::FileTransferSending, m_eventTarget, chunk));
 
@@ -177,9 +164,7 @@ bool FileSender::sendNextChunk()
 
     LOG_DEBUG("file transfer: completed file '%s'", m_currentFileInfo.relativePath.c_str());
 
-    // Try next file
     if (!openNextFile()) {
-      // No more files, send transfer end
       auto *endChunk = FileTransferChunk::transferEnd(m_transferId);
       m_events->addEvent(Event(EventTypes::FileTransferSending, m_eventTarget, endChunk));
       m_complete = true;
@@ -216,7 +201,6 @@ void FileSender::cancel(const std::string &reason)
 
 void FileSender::sendDragInfo()
 {
-  // Format: "transferId:fileCount:totalSize"
   std::string infoStr = std::to_string(m_transferId) + ":" + std::to_string(m_totalFiles) + ":" + std::to_string(m_totalBytes);
 
   LOG_DEBUG("file transfer: drag info ready, %d files, %llu bytes", m_totalFiles, m_totalBytes);

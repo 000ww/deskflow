@@ -7,11 +7,12 @@
 #pragma once
 
 #include <cstdint>
-#include <fstream>
 #include <functional>
 #include <queue>
 #include <string>
 #include <vector>
+
+class QFile;
 
 namespace deskflow {
 class IStream;
@@ -100,7 +101,7 @@ private:
   uint64_t m_bytesSent = 0;
   uint32_t m_filesCompleted = 0;
 
-  std::ifstream m_currentFile;
+  void *m_currentFile = nullptr;
   FileTransferInfo m_currentFileInfo;
   uint64_t m_currentFileBytesSent = 0;
 

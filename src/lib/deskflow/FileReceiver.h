@@ -7,9 +7,10 @@
 #pragma once
 
 #include <cstdint>
-#include <fstream>
 #include <functional>
 #include <string>
+
+class QFile;
 
 namespace deskflow {
 class IStream;
@@ -75,7 +76,7 @@ private:
 
   FileReceiverState m_state = FileReceiverState::Waiting;
 
-  std::ofstream m_currentFile;
+  void *m_currentFile = nullptr;
   std::string m_currentFilePath;
   std::string m_tempFilePath;
 

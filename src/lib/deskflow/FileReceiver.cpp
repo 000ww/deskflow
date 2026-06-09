@@ -21,16 +21,21 @@ FileReceiver::FileReceiver(uint32_t transferId, const std::string &downloadDir)
 
 FileReceiver::~FileReceiver()
 {
-  if (m_currentFile.is_open()) {
-    m_currentFile.close();
-    QFile::remove(QString::fromStdString(m_tempFilePath));
+  auto *file = static_cast<std::ofstream *>(m_currentFile);
+  if (file) {
+    if (file->is_open()) {
+      file->close();
+      QFile::remove(QString::fromStdString(m_tempFilePath));
+    }
+    delete file;
   }
 }
 
 bool FileReceiver::onFileStart(const std::string &relativePath)
 {
-  if (m_currentFile.is_open()) {
-    m_currentFile.close();
+  auto *file = static_cast<std::ofstream *>(m_currentFile);
+  if (file && file->is_open()) {
+    file->close();
     QFile::remove(QString::fromStdString(m_tempFilePath));
   }
 
@@ -69,8 +74,11 @@ bool FileReceiver::onFileStart(const std::string &relativePath)
   }
 
   m_tempFilePath = m_currentFilePath + ".deskflow.tmp";
-  m_currentFile.open(m_tempFilePath, std::ios::binary | std::ios::trunc);
-  if (!m_currentFile.is_open()) {
+  delete file;
+  file = new std::ofstream(m_tempFilePath, std::ios::binary | std::ios::trunc);
+  m_currentFile = file;
+
+  if (!file->is_open()) {
     LOG_ERR("file transfer: cannot create file: %s", m_tempFilePath.c_str());
     m_state = FileReceiverState::Error;
     if (m_completeCallback) {
@@ -88,12 +96,13 @@ bool FileReceiver::onFileStart(const std::string &relativePath)
 
 bool FileReceiver::onDataChunk(const std::string &data)
 {
-  if (m_state != FileReceiverState::ReceivingFile || !m_currentFile.is_open()) {
+  auto *file = static_cast<std::ofstream *>(m_currentFile);
+  if (m_state != FileReceiverState::ReceivingFile || !file || !file->is_open()) {
     return true;
   }
 
-  m_currentFile.write(data.data(), static_cast<std::streamsize>(data.size()));
-  if (m_currentFile.fail()) {
+  file->write(data.data(), static_cast<std::streamsize>(data.size()));
+  if (file->fail()) {
     LOG_ERR("file transfer: write error");
     m_state = FileReceiverState::Error;
     if (m_completeCallback) {
@@ -115,8 +124,9 @@ bool FileReceiver::onDataChunk(const std::string &data)
 
 bool FileReceiver::onFileEnd()
 {
-  if (m_currentFile.is_open()) {
-    m_currentFile.close();
+  auto *file = static_cast<std::ofstream *>(m_currentFile);
+  if (file && file->is_open()) {
+    file->close();
 
     QFile::remove(QString::fromStdString(m_currentFilePath));
     if (!QFile::rename(QString::fromStdString(m_tempFilePath), QString::fromStdString(m_currentFilePath))) {
@@ -139,8 +149,9 @@ bool FileReceiver::onFileEnd()
 
 void FileReceiver::onTransferEnd()
 {
-  if (m_currentFile.is_open()) {
-    m_currentFile.close();
+  auto *file = static_cast<std::ofstream *>(m_currentFile);
+  if (file && file->is_open()) {
+    file->close();
   }
 
   m_state = FileReceiverState::Complete;
@@ -153,8 +164,9 @@ void FileReceiver::onTransferEnd()
 
 void FileReceiver::onTransferCancel(const std::string &reason)
 {
-  if (m_currentFile.is_open()) {
-    m_currentFile.close();
+  auto *file = static_cast<std::ofstream *>(m_currentFile);
+  if (file && file->is_open()) {
+    file->close();
     QFile::remove(QString::fromStdString(m_tempFilePath));
   }
 

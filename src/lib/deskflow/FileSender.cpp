@@ -15,12 +15,19 @@
 #include <QDir>
 #include <QFileInfo>
 #include <fstream>
+#include <memory>
 
 FileSender::FileSender(uint32_t transferId, IEventQueue *events, void *eventTarget)
     : m_transferId(transferId),
       m_events(events),
       m_eventTarget(eventTarget)
 {
+}
+
+FileSender::~FileSender()
+{
+  auto *file = static_cast<std::ifstream *>(m_currentFile);
+  delete file;
 }
 
 void FileSender::queueFiles(const std::vector<std::string> &paths, const std::string &baseDir)
@@ -84,8 +91,9 @@ void FileSender::start()
 
 bool FileSender::openNextFile()
 {
-  if (m_currentFile.is_open()) {
-    m_currentFile.close();
+  auto *file = static_cast<std::ifstream *>(m_currentFile);
+  if (file && file->is_open()) {
+    file->close();
   }
 
   while (!m_fileQueue.empty()) {
@@ -96,8 +104,11 @@ bool FileSender::openNextFile()
       continue;
     }
 
-    m_currentFile.open(m_currentFileInfo.absolutePath, std::ios::binary);
-    if (!m_currentFile.is_open()) {
+    delete file;
+    file = new std::ifstream(m_currentFileInfo.absolutePath, std::ios::binary);
+    m_currentFile = file;
+
+    if (!file->is_open()) {
       LOG_ERR("file transfer: cannot open file: %s", m_currentFileInfo.absolutePath.c_str());
       continue;
     }
@@ -120,7 +131,8 @@ bool FileSender::sendNextChunk()
     return false;
   }
 
-  if (!m_currentFile.is_open()) {
+  auto *file = static_cast<std::ifstream *>(m_currentFile);
+  if (!file || !file->is_open()) {
     if (!openNextFile()) {
       auto *chunk = FileTransferChunk::transferEnd(m_transferId);
       m_events->addEvent(Event(EventTypes::FileTransferSending, m_eventTarget, chunk));
@@ -131,11 +143,12 @@ bool FileSender::sendNextChunk()
       }
       return false;
     }
+    file = static_cast<std::ifstream *>(m_currentFile);
   }
 
   char buffer[kChunkSize];
-  m_currentFile.read(buffer, kChunkSize);
-  size_t bytesRead = static_cast<size_t>(m_currentFile.gcount());
+  file->read(buffer, kChunkSize);
+  size_t bytesRead = static_cast<size_t>(file->gcount());
 
   if (bytesRead > 0) {
     std::string data(buffer, bytesRead);
@@ -150,12 +163,12 @@ bool FileSender::sendNextChunk()
     }
   }
 
-  if (m_currentFile.eof() || m_currentFileBytesSent >= m_currentFileInfo.size) {
+  if (file->eof() || m_currentFileBytesSent >= m_currentFileInfo.size) {
     auto *chunk = FileTransferChunk::fileEnd(m_transferId);
     m_events->addEvent(Event(EventTypes::FileTransferSending, m_eventTarget, chunk));
 
     m_filesCompleted++;
-    m_currentFile.close();
+    file->close();
 
     LOG_DEBUG("file transfer: completed file '%s'", m_currentFileInfo.relativePath.c_str());
 
@@ -180,8 +193,9 @@ void FileSender::cancel(const std::string &reason)
     return;
   }
 
-  if (m_currentFile.is_open()) {
-    m_currentFile.close();
+  auto *file = static_cast<std::ifstream *>(m_currentFile);
+  if (file && file->is_open()) {
+    file->close();
   }
 
   auto *chunk = FileTransferChunk::transferCancel(m_transferId, reason);

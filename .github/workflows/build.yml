@@ -11,6 +11,7 @@ on:
   workflow_dispatch:
 
 env:
+  QT_VERSION_LINUX: "6.7.2"
   QT_VERSION: "6.7.0"
 
 jobs:
@@ -187,7 +188,7 @@ jobs:
   # ============================================================
   build-linux:
     name: Linux x64
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
@@ -213,10 +214,10 @@ jobs:
       - name: Install Qt via aqtinstall
         run: |
           pip install aqtinstall
-          aqt install-qt linux desktop ${{ env.QT_VERSION }} linux_gcc_64 --outputdir /opt/qt
-          echo "QT_ROOT_DIR=/opt/qt/${{ env.QT_VERSION }}/gcc_64" >> $GITHUB_ENV
-          echo "Qt6_DIR=/opt/qt/${{ env.QT_VERSION }}/gcc_64/lib/cmake/Qt6" >> $GITHUB_ENV
-          echo "/opt/qt/${{ env.QT_VERSION }}/gcc_64/bin" >> $GITHUB_PATH
+          aqt install-qt linux desktop ${{ env.QT_VERSION_LINUX }} linux_gcc_64 --outputdir /opt/qt
+          echo "QT_ROOT_DIR=/opt/qt/${{ env.QT_VERSION_LINUX }}/gcc_64" >> $GITHUB_ENV
+          echo "Qt6_DIR=/opt/qt/${{ env.QT_VERSION_LINUX }}/gcc_64/lib/cmake/Qt6" >> $GITHUB_ENV
+          echo "/opt/qt/${{ env.QT_VERSION_LINUX }}/gcc_64/bin" >> $GITHUB_PATH
 
       - name: Configure
         run: |

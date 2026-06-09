@@ -136,6 +136,8 @@ elseif(UNIX)
       XWindowsScreenSaver.h
       XWindowsUtil.cpp
       XWindowsUtil.h
+      XWindowsXdndHandler.cpp
+      XWindowsXdndHandler.h
       ${CMAKE_CURRENT_BINARY_DIR}/XWindowsConfig.h
     )
   endif()

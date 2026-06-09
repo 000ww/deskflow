@@ -4,12 +4,14 @@
  * SPDX-License-Identifier: GPL-2.0-only WITH LicenseRef-OpenSSL-Exception
  */
 
-#include <filesystem>
-#include <fstream>
-
 #include "deskflow/FileReceiver.h"
 
 #include "base/Log.h"
+
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <fstream>
 
 FileReceiver::FileReceiver(uint32_t transferId, const std::string &downloadDir)
     : m_transferId(transferId),
@@ -21,8 +23,7 @@ FileReceiver::~FileReceiver()
 {
   if (m_currentFile.is_open()) {
     m_currentFile.close();
-    std::error_code ec;
-    std::filesystem::remove(m_tempFilePath, ec);
+    QFile::remove(QString::fromStdString(m_tempFilePath));
   }
 }
 
@@ -30,8 +31,7 @@ bool FileReceiver::onFileStart(const std::string &relativePath)
 {
   if (m_currentFile.is_open()) {
     m_currentFile.close();
-    std::error_code ec;
-    std::filesystem::remove(m_tempFilePath, ec);
+    QFile::remove(QString::fromStdString(m_tempFilePath));
   }
 
   std::string safePath = sanitizePath(relativePath);
@@ -47,13 +47,12 @@ bool FileReceiver::onFileStart(const std::string &relativePath)
   m_currentFilePath = m_downloadDir + "/" + safePath;
 
   if (relativePath.back() == '/' || relativePath.back() == '\\') {
-    std::error_code ec;
-    std::filesystem::create_directories(m_currentFilePath, ec);
-    if (ec) {
-      LOG_ERR("file transfer: cannot create directory: %s: %s", m_currentFilePath.c_str(), ec.message().c_str());
+    QDir dir;
+    if (!dir.mkpath(QString::fromStdString(m_currentFilePath))) {
+      LOG_ERR("file transfer: cannot create directory: %s", m_currentFilePath.c_str());
       m_state = FileReceiverState::Error;
       if (m_completeCallback) {
-        m_completeCallback(false, "Cannot create directory: " + ec.message());
+        m_completeCallback(false, "Cannot create directory: " + m_currentFilePath);
       }
       return false;
     }
@@ -119,13 +118,12 @@ bool FileReceiver::onFileEnd()
   if (m_currentFile.is_open()) {
     m_currentFile.close();
 
-    std::error_code ec;
-    std::filesystem::rename(m_tempFilePath, m_currentFilePath, ec);
-    if (ec) {
-      LOG_ERR("file transfer: cannot rename temp file: %s", ec.message().c_str());
+    QFile::remove(QString::fromStdString(m_currentFilePath));
+    if (!QFile::rename(QString::fromStdString(m_tempFilePath), QString::fromStdString(m_currentFilePath))) {
+      LOG_ERR("file transfer: cannot rename temp file");
       m_state = FileReceiverState::Error;
       if (m_completeCallback) {
-        m_completeCallback(false, "Cannot rename temp file: " + ec.message());
+        m_completeCallback(false, "Cannot rename temp file");
       }
       return false;
     }
@@ -157,8 +155,7 @@ void FileReceiver::onTransferCancel(const std::string &reason)
 {
   if (m_currentFile.is_open()) {
     m_currentFile.close();
-    std::error_code ec;
-    std::filesystem::remove(m_tempFilePath, ec);
+    QFile::remove(QString::fromStdString(m_tempFilePath));
   }
 
   m_state = FileReceiverState::Error;
@@ -198,13 +195,11 @@ std::string FileReceiver::sanitizePath(const std::string &path)
 
 bool FileReceiver::ensureParentDirectories(const std::string &path)
 {
-  std::error_code ec;
-  std::filesystem::path fsPath(path);
-  auto parent = fsPath.parent_path();
-  if (!parent.empty()) {
-    std::filesystem::create_directories(parent, ec);
-    if (ec) {
-      LOG_ERR("file transfer: cannot create directory: %s: %s", parent.c_str(), ec.message().c_str());
+  QFileInfo fi(QString::fromStdString(path));
+  QDir dir = fi.absoluteDir();
+  if (!dir.exists()) {
+    if (!dir.mkpath(".")) {
+      LOG_ERR("file transfer: cannot create directory: %s", dir.absolutePath().toStdString().c_str());
       return false;
     }
   }

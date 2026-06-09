@@ -4,9 +4,6 @@
  * SPDX-License-Identifier: GPL-2.0-only WITH LicenseRef-OpenSSL-Exception
  */
 
-#include <filesystem>
-#include <fstream>
-
 #include "deskflow/FileSender.h"
 
 #include "base/Event.h"
@@ -14,6 +11,10 @@
 #include "base/Log.h"
 #include "deskflow/FileTransferChunk.h"
 #include "deskflow/ProtocolTypes.h"
+
+#include <QDir>
+#include <QFileInfo>
+#include <fstream>
 
 FileSender::FileSender(uint32_t transferId, IEventQueue *events, void *eventTarget)
     : m_transferId(transferId),
@@ -32,36 +33,30 @@ void FileSender::queueFiles(const std::vector<std::string> &paths, const std::st
 
 void FileSender::collectFiles(const std::string &path, const std::string &baseDir)
 {
-  std::error_code ec;
-  std::filesystem::path fsPath(path);
-  if (!std::filesystem::exists(fsPath, ec)) {
+  QFileInfo fi(QString::fromStdString(path));
+  if (!fi.exists()) {
     LOG_WARN("file transfer: path does not exist: %s", path.c_str());
     return;
   }
 
   FileTransferInfo info;
   info.absolutePath = path;
-  info.relativePath = std::filesystem::relative(fsPath, baseDir, ec).string();
-  if (ec) {
-    LOG_WARN("file transfer: cannot compute relative path for %s: %s", path.c_str(), ec.message().c_str());
-    info.relativePath = fsPath.filename().string();
-  }
 
-  if (std::filesystem::is_directory(fsPath, ec)) {
+  QDir base(QString::fromStdString(baseDir));
+  info.relativePath = base.relativeFilePath(fi.absoluteFilePath()).toStdString();
+
+  if (fi.isDir()) {
     info.isDirectory = true;
     info.size = 0;
     m_fileQueue.push(info);
 
-    for (const auto &entry : std::filesystem::directory_iterator(fsPath, ec)) {
-      collectFiles(entry.path().string(), baseDir);
+    QDir dir(fi.absoluteFilePath());
+    for (const auto &entry : dir.entryInfoList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot)) {
+      collectFiles(entry.absoluteFilePath().toStdString(), baseDir);
     }
   } else {
     info.isDirectory = false;
-    info.size = std::filesystem::file_size(fsPath, ec);
-    if (ec) {
-      LOG_WARN("file transfer: cannot get file size for %s: %s", path.c_str(), ec.message().c_str());
-      info.size = 0;
-    }
+    info.size = static_cast<uint64_t>(fi.size());
     m_totalBytes += info.size;
     m_fileQueue.push(info);
   }

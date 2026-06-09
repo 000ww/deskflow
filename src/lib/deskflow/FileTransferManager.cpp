@@ -4,8 +4,6 @@
  * SPDX-License-Identifier: GPL-2.0-only WITH LicenseRef-OpenSSL-Exception
  */
 
-#include <filesystem>
-
 #include "deskflow/FileTransferManager.h"
 
 #include "base/Event.h"
@@ -13,6 +11,8 @@
 #include "base/Log.h"
 #include "deskflow/FileTransferChunk.h"
 #include "deskflow/ProtocolTypes.h"
+
+#include <QDir>
 
 FileTransferManager &FileTransferManager::instance()
 {
@@ -26,10 +26,11 @@ void FileTransferManager::init(IEventQueue *events, const std::string &downloadD
   m_events = events;
   m_downloadDir = downloadDir;
 
-  std::error_code ec;
-  std::filesystem::create_directories(downloadDir, ec);
-  if (ec) {
-    LOG_ERR("file transfer: cannot create download directory: %s: %s", downloadDir.c_str(), ec.message().c_str());
+  QDir dir(QString::fromStdString(downloadDir));
+  if (!dir.exists()) {
+    if (!dir.mkpath(".")) {
+      LOG_ERR("file transfer: cannot create download directory: %s", downloadDir.c_str());
+    }
   }
 
   LOG_DEBUG("file transfer: initialized, download dir=%s", downloadDir.c_str());
@@ -213,10 +214,11 @@ void FileTransferManager::setDownloadDir(const std::string &dir)
   std::lock_guard<std::mutex> lock(m_mutex);
   m_downloadDir = dir;
 
-  std::error_code ec;
-  std::filesystem::create_directories(dir, ec);
-  if (ec) {
-    LOG_ERR("file transfer: cannot create download directory: %s: %s", dir.c_str(), ec.message().c_str());
+  QDir qdir(QString::fromStdString(dir));
+  if (!qdir.exists()) {
+    if (!qdir.mkpath(".")) {
+      LOG_ERR("file transfer: cannot create download directory: %s", dir.c_str());
+    }
   }
 }
 

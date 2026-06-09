@@ -1226,6 +1226,10 @@ void XWindowsScreen::handleSystemEvent(const Event &event)
   } break;
 
   case SelectionNotify:
+    // Handle Xdnd selection notifications first
+    if (m_xdndHandler && m_xdndHandler->handleSelectionNotify(xevent->xselection)) {
+      return;
+    }
     // notification of selection transferred.  we shouldn't
     // get this here because we handle them in the selection
     // retrieval methods.  we'll just delete the property
@@ -1296,13 +1300,6 @@ void XWindowsScreen::handleSystemEvent(const Event &event)
       sendEvent(EventTypes::ScreenShapeChanged);
     }
     return;
-
-  case SelectionNotify:
-    // Handle Xdnd selection notifications
-    if (m_xdndHandler && m_xdndHandler->handleSelectionNotify(xevent->xselection)) {
-      return;
-    }
-    break;
 
   case ClientMessage:
     // Handle Xdnd protocol messages

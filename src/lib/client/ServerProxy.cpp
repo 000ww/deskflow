@@ -14,6 +14,8 @@
 #include "deskflow/Clipboard.h"
 #include "deskflow/ClipboardChunk.h"
 #include "deskflow/DeskflowException.h"
+#include "deskflow/FileTransferChunk.h"
+#include "deskflow/FileTransferManager.h"
 #include "deskflow/OptionTypes.h"
 #include "deskflow/ProtocolTypes.h"
 #include "deskflow/ProtocolUtil.h"
@@ -306,6 +308,14 @@ ServerProxy::ConnectionResult ServerProxy::parseMessage(const uint8_t *code)
 
   else if (memcmp(code, kMsgDSecureInputNotification, 4) == 0) {
     secureInputNotification();
+  }
+
+  else if (memcmp(code, kMsgDFileTransfer, 4) == 0) {
+    handleFileTransfer();
+  }
+
+  else if (memcmp(code, kMsgDDragInfo, 4) == 0) {
+    handleDragInfo();
   }
 
   else if (memcmp(code, kMsgCClose, 4) == 0) {
@@ -849,4 +859,51 @@ void ServerProxy::setActiveServerLanguage(const std::string_view &language)
   } else {
     LOG_VERBOSE("active server layout is empty");
   }
+}
+
+void ServerProxy::handleFileTransfer()
+{
+  LOG_DEBUG("received file transfer chunk from server");
+
+  uint32_t transferId;
+  uint8_t mark;
+  std::string data;
+
+  auto state = FileTransferChunk::assemble(m_stream, transferId, mark, data);
+  if (state == TransferState::Error) {
+    LOG_ERR("failed to assemble file transfer chunk");
+    return;
+  }
+
+  FileTransferManager::instance().handleFileChunk(transferId, mark, data);
+}
+
+void ServerProxy::handleDragInfo()
+{
+  LOG_DEBUG("received drag info from server");
+
+  uint16_t fileCount;
+  std::string info;
+
+  if (!ProtocolUtil::readf(m_stream, kMsgDDragInfo + 4, &fileCount, &info)) {
+    LOG_ERR("failed to read drag info");
+    return;
+  }
+
+  // Parse the info string to get transferId and totalSize
+  uint32_t transferId = 0;
+  uint64_t totalSize = 0;
+
+  size_t colonPos = info.find(':');
+  if (colonPos != std::string::npos) {
+    transferId = std::stoul(info.substr(0, colonPos));
+    totalSize = std::stoull(info.substr(colonPos + 1));
+  }
+
+  // Get server name as source screen
+  std::string sourceScreen = "Server";
+
+  FileTransferManager::instance().handleDragInfo(
+      transferId, fileCount, totalSize, sourceScreen, m_stream, this
+  );
 }

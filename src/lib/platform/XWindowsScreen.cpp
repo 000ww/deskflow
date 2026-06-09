@@ -26,6 +26,7 @@
 #include "platform/XWindowsKeyState.h"
 #include "platform/XWindowsScreenSaver.h"
 #include "platform/XWindowsUtil.h"
+#include "platform/XWindowsXdndHandler.h"
 
 #include <X11/X.h>
 #include <X11/Xutil.h>
@@ -151,6 +152,11 @@ XWindowsScreen::XWindowsScreen(const char *displayName, bool isPrimary, IEventQu
 
   // install the platform event queue
   m_events->adoptBuffer(new XWindowsEventQueueBuffer(m_display, m_window, m_events));
+
+  // setup drag-and-drop support for primary screens
+  if (m_isPrimary) {
+    m_xdndHandler = new XWindowsXdndHandler(m_display, m_window, this);
+  }
 }
 
 XWindowsScreen::~XWindowsScreen()
@@ -165,8 +171,10 @@ XWindowsScreen::~XWindowsScreen()
   }
   delete m_keyState;
   delete m_screensaver;
+  delete m_xdndHandler;
   m_keyState = nullptr;
   m_screensaver = nullptr;
+  m_xdndHandler = nullptr;
   if (m_display != nullptr) {
     // FIXME -- is it safe to clean up the IC and IM without a display?
     if (m_ic != nullptr) {
@@ -1288,6 +1296,20 @@ void XWindowsScreen::handleSystemEvent(const Event &event)
       sendEvent(EventTypes::ScreenShapeChanged);
     }
     return;
+
+  case SelectionNotify:
+    // Handle Xdnd selection notifications
+    if (m_xdndHandler && m_xdndHandler->handleSelectionNotify(xevent->xselection)) {
+      return;
+    }
+    break;
+
+  case ClientMessage:
+    // Handle Xdnd protocol messages
+    if (m_xdndHandler && m_xdndHandler->handleClientMessage(xevent->xclient)) {
+      return;
+    }
+    break;
 
   default:
 #if HAVE_XKB_EXTENSION

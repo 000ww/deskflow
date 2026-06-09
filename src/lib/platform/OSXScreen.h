@@ -317,4 +317,7 @@ private:
   OSXPowerManager m_powerManager;
 
   class OSXScreenImpl *m_impl;
+
+  // drag-and-drop view (macOS only)
+  void *m_dragDropView = nullptr;
 };

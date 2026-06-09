@@ -23,6 +23,7 @@
 class XWindowsClipboard;
 class XWindowsKeyState;
 class XWindowsScreenSaver;
+class XWindowsXdndHandler;
 
 //! Implementation of IPlatformScreen for X11
 class XWindowsScreen : public PlatformScreen
@@ -242,6 +243,9 @@ private:
 
   IEventQueue *m_events = nullptr;
   deskflow::KeyMap m_keyMap;
+
+  // drag-and-drop support
+  XWindowsXdndHandler *m_xdndHandler = nullptr;
 
   // pointer to (singleton) screen.  this is only needed by
   // ioErrorHandler().

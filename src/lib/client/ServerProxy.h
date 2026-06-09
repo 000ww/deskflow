@@ -98,6 +98,8 @@ private:
   void secureInputNotification();
   void setServerLanguages();
   void setActiveServerLanguage(const std::string_view &language);
+  void handleFileTransfer();
+  void handleDragInfo();
 
 private:
   using MessageParser = ConnectionResult (ServerProxy::*)(const uint8_t *);

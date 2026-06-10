@@ -199,14 +199,13 @@ jobs:
           sudo add-apt-repository -y ppa:lopin/deskflow
           sudo apt-get update
           sudo apt-get install -y \
-            cmake ninja-build g++ \
+            cmake ninja-build clang \
             libssl-dev \
             libgl1-mesa-dev \
             libx11-dev libxtst-dev libxkbfile-dev \
             libxrandr-dev libxinerama-dev libxi-dev \
             libxext-dev libice-dev libsm-dev \
             libglib2.0-dev libxkbcommon-dev \
-            libxkbcommon-x11-0 \
             libei-dev libportal-dev \
             pkg-config \
             libegl1 libopengl0
@@ -224,6 +223,8 @@ jobs:
           cmake -S . -B build \
             -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=clang \
+            -DCMAKE_CXX_COMPILER=clang++ \
             -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR" \
             -DQt6_DIR="$Qt6_DIR" \
             -DBUILD_TESTS=OFF \

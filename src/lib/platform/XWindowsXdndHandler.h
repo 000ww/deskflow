@@ -8,6 +8,11 @@
 
 #include <X11/Xlib.h>
 
+// X11 defines CursorShape as a macro which conflicts with Qt's enum
+#ifdef CursorShape
+#undef CursorShape
+#endif
+
 #include <cstdint>
 #include <filesystem>
 #include <string>

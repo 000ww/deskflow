@@ -20,6 +20,23 @@
 
 #include <X11/Xlib.h>
 
+// X11 defines macros that conflict with Qt 6.8+ enums
+#ifdef CursorShape
+#undef CursorShape
+#endif
+#ifdef Status
+#undef Status
+#endif
+#ifdef Bool
+#undef Bool
+#endif
+#ifdef True
+#undef True
+#endif
+#ifdef False
+#undef False
+#endif
+
 class XWindowsClipboard;
 class XWindowsKeyState;
 class XWindowsScreenSaver;

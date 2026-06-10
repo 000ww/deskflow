@@ -78,6 +78,8 @@ public:
   bool isPrimary() const override;
   std::string getSecureInputApp() const override;
 
+  void handleFileDrop(const std::vector<std::filesystem::path> &files, const std::filesystem::path &baseDir);
+
 protected:
   // IPlatformScreen overrides
   void handleSystemEvent(const Event &event) override;

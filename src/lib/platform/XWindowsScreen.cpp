@@ -13,6 +13,7 @@
 #include "arch/Arch.h"
 #include "base/IEventQueue.h"
 #include "base/Log.h"
+#include "deskflow/FileTransferManager.h"
 #include "base/Stopwatch.h"
 #include "deskflow/App.h"
 #include "deskflow/ClientApp.h"
@@ -1969,3 +1970,15 @@ void XWindowsScreen::selectXIRawMotion()
   free(mask.mask);
 }
 #endif
+
+void XWindowsScreen::handleFileDrop(const std::vector<std::filesystem::path> &files, const std::filesystem::path &baseDir)
+{
+  std::vector<std::string> filePaths;
+  for (const auto &f : files) {
+    filePaths.push_back(f.string());
+  }
+  std::string base = baseDir.string();
+
+  FileTransferManager::instance().sendFiles(filePaths, base, nullptr, getEventTarget());
+  LOG_DEBUG("X11: initiated file transfer for %zu files", files.size());
+}

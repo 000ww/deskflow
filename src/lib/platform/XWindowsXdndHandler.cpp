@@ -6,17 +6,14 @@
 
 #include "platform/XWindowsXdndHandler.h"
 
-#include "base/Log.h"
-#include "deskflow/FileTransferManager.h"
-#include "platform/XWindowsScreen.h"
-
-// XWindowsScreen.h re-includes X11/Xlib.h which redefines CursorShape
-#ifdef CursorShape
-#undef CursorShape
-#endif
+// NOTE: Do NOT include Qt headers here - X11 headers define macros
+// (Status, Bool, True, False, CursorShape) that break Qt internals.
+// Use fprintf for logging and callback for file transfer.
 
 #include <X11/Xatom.h>
+#include <X11/Xlib.h>
 #include <algorithm>
+#include <cstdio>
 #include <sstream>
 
 XWindowsXdndHandler::XWindowsXdndHandler(Display *display, Window window, XWindowsScreen *screen)
@@ -28,7 +25,6 @@ XWindowsXdndHandler::XWindowsXdndHandler(Display *display, Window window, XWindo
       m_hasUriList(false),
       m_dropAccepted(false)
 {
-  // Intern Xdnd atoms
   m_xdndEnter = XInternAtom(m_display, "XdndEnter", False);
   m_xdndPosition = XInternAtom(m_display, "XdndPosition", False);
   m_xdndLeave = XInternAtom(m_display, "XdndLeave", False);
@@ -44,7 +40,7 @@ XWindowsXdndHandler::XWindowsXdndHandler(Display *display, Window window, XWindo
   Atom version = 5;
   XChangeProperty(m_display, m_window, m_xdndAware, XA_ATOM, 32, PropModeReplace, reinterpret_cast<unsigned char *>(&version), 1);
 
-  LOG_DEBUG("X11: Xdnd handler initialized for window %lu", m_window);
+  fprintf(stderr, "X11: Xdnd handler initialized for window %lu\n", m_window);
 }
 
 bool XWindowsXdndHandler::handleClientMessage(const XClientMessageEvent &event)
@@ -68,7 +64,6 @@ bool XWindowsXdndHandler::handleClientMessage(const XClientMessageEvent &event)
 bool XWindowsXdndHandler::handleSelectionNotify(const XSelectionEvent &event)
 {
   if (event.selection == XInternAtom(m_display, "XdndSelection", False) && event.property == m_uriListAtom) {
-    // Read the drop data
     Atom actualType;
     int actualFormat;
     unsigned long itemCount;
@@ -94,9 +89,6 @@ void XWindowsXdndHandler::handleXdndEnter(const XClientMessageEvent &event)
   m_dragActive = true;
   m_hasUriList = false;
 
-  // Check if the source supports text/uri-list
-  // data.l[1] contains version and more-than-three-types flags
-  // data.l[2..4] contain the first three data types
   unsigned long flags = event.data.l[1];
   bool hasThreeTypes = (flags & 1) != 0;
 
@@ -112,7 +104,6 @@ void XWindowsXdndHandler::handleXdndEnter(const XClientMessageEvent &event)
     }
   }
 
-  // If more than three types, we need to check the XdndTypeList property
   if (!m_hasUriList && hasThreeTypes) {
     Atom actualType;
     int actualFormat;
@@ -136,12 +127,11 @@ void XWindowsXdndHandler::handleXdndEnter(const XClientMessageEvent &event)
     }
   }
 
-  LOG_DEBUG("X11: XdndEnter from window %lu, hasUriList=%d", m_sourceWindow, m_hasUriList);
+  fprintf(stderr, "X11: XdndEnter from window %lu, hasUriList=%d\n", m_sourceWindow, m_hasUriList);
 }
 
 void XWindowsXdndHandler::handleXdndPosition(const XClientMessageEvent &event)
 {
-  // Accept the drop if we support the data type
   bool accept = m_hasUriList;
   sendXdndStatus(m_sourceWindow, accept);
 }
@@ -151,8 +141,7 @@ void XWindowsXdndHandler::handleXdndLeave(const XClientMessageEvent &event)
   m_dragActive = false;
   m_hasUriList = false;
   m_sourceWindow = None;
-
-  LOG_DEBUG("X11: XdndLeave");
+  fprintf(stderr, "X11: XdndLeave\n");
 }
 
 void XWindowsXdndHandler::handleXdndDrop(const XClientMessageEvent &event)
@@ -161,8 +150,6 @@ void XWindowsXdndHandler::handleXdndDrop(const XClientMessageEvent &event)
     sendXdndFinished(m_sourceWindow, false);
     return;
   }
-
-  // Request the drop data
   requestDropData();
 }
 
@@ -176,11 +163,11 @@ void XWindowsXdndHandler::sendXdndStatus(Window sourceWindow, bool accept)
   status.window = sourceWindow;
   status.message_type = m_xdndStatus;
   status.format = 32;
-  status.data.l[0] = m_window;                                     // target window
-  status.data.l[1] = (accept ? 1 : 0) | 2;                        // flags (accept + want position)
-  status.data.l[2] = 0;                                            // x,y of drop rectangle
-  status.data.l[3] = 0;                                            // w,h of drop rectangle
-  status.data.l[4] = accept ? m_xdndActionCopy : None;            // action
+  status.data.l[0] = m_window;
+  status.data.l[1] = (accept ? 1 : 0) | 2;
+  status.data.l[2] = 0;
+  status.data.l[3] = 0;
+  status.data.l[4] = accept ? m_xdndActionCopy : None;
 
   XSendEvent(m_display, sourceWindow, False, NoEventMask, reinterpret_cast<XEvent *>(&status));
   XFlush(m_display);
@@ -196,9 +183,9 @@ void XWindowsXdndHandler::sendXdndFinished(Window sourceWindow, bool accept)
   finished.window = sourceWindow;
   finished.message_type = m_xdndFinished;
   finished.format = 32;
-  finished.data.l[0] = m_window;                                   // target window
-  finished.data.l[1] = accept ? 1 : 0;                             // flags
-  finished.data.l[2] = accept ? m_xdndActionCopy : None;           // action performed
+  finished.data.l[0] = m_window;
+  finished.data.l[1] = accept ? 1 : 0;
+  finished.data.l[2] = accept ? m_xdndActionCopy : None;
 
   XSendEvent(m_display, sourceWindow, False, NoEventMask, reinterpret_cast<XEvent *>(&finished));
   XFlush(m_display);
@@ -210,7 +197,6 @@ void XWindowsXdndHandler::sendXdndFinished(Window sourceWindow, bool accept)
 
 void XWindowsXdndHandler::requestDropData()
 {
-  // Request text/uri-list from the source
   XConvertSelection(m_display, XInternAtom(m_display, "XdndSelection", False), m_uriListAtom, m_uriListAtom, m_window, CurrentTime);
   XFlush(m_display);
 }
@@ -218,17 +204,15 @@ void XWindowsXdndHandler::requestDropData()
 void XWindowsXdndHandler::processDropData(const unsigned char *data, unsigned long length)
 {
   std::string uriList(reinterpret_cast<const char *>(data), length);
-
-  // Parse file URIs
   std::vector<std::filesystem::path> files = parseUriList(uriList);
 
   if (files.empty()) {
-    LOG_WARN("X11: XdndDrop: no valid files found in drop data");
+    fprintf(stderr, "X11: XdndDrop: no valid files found\n");
     sendXdndFinished(m_sourceWindow, false);
     return;
   }
 
-  LOG_DEBUG("X11: XdndDrop: %zu files dropped", files.size());
+  fprintf(stderr, "X11: XdndDrop: %zu files dropped\n", files.size());
 
   // Determine base directory
   std::filesystem::path baseDir;
@@ -236,8 +220,11 @@ void XWindowsXdndHandler::processDropData(const unsigned char *data, unsigned lo
     baseDir = files[0].parent_path();
   }
 
-  // Send files through FileTransferManager
-  FileTransferManager::instance().sendFiles(files, baseDir, nullptr, m_screen);
+  // Call file transfer through screen's event system
+  // The actual FileTransferManager call will be wired through the screen
+  if (m_screen) {
+    m_screen->handleFileDrop(files, baseDir);
+  }
 
   sendXdndFinished(m_sourceWindow, true);
 }
@@ -249,21 +236,17 @@ std::vector<std::filesystem::path> XWindowsXdndHandler::parseUriList(const std::
   std::string line;
 
   while (std::getline(stream, line)) {
-    // Remove \r if present
     if (!line.empty() && line.back() == '\r') {
       line.pop_back();
     }
 
-    // Skip empty lines and comments
     if (line.empty() || line[0] == '#') {
       continue;
     }
 
-    // Parse file:// URIs
     if (line.substr(0, 7) == "file://") {
       std::string path = line.substr(7);
 
-      // Decode percent-encoded characters
       std::string decoded;
       for (size_t i = 0; i < path.size(); i++) {
         if (path[i] == '%' && i + 2 < path.size()) {

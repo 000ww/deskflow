@@ -4,11 +4,28 @@
  * SPDX-License-Identifier: GPL-2.0-only WITH LicenseRef-OpenSSL-Exception
  */
 
-#include "platform/XWindowsXdndHandler.h"
+#include "platform/XWindowsScreen.h"
 
-// NOTE: Do NOT include Qt headers here - X11 headers define macros
-// (Status, Bool, True, False, CursorShape) that break Qt internals.
-// Use fprintf for logging and callback for file transfer.
+#include "base/Log.h"
+#include "deskflow/FileTransferManager.h"
+
+#ifdef CursorShape
+#undef CursorShape
+#endif
+#ifdef Status
+#undef Status
+#endif
+#ifdef Bool
+#undef Bool
+#endif
+#ifdef True
+#undef True
+#endif
+#ifdef False
+#undef False
+#endif
+
+#include "platform/XWindowsXdndHandler.h"
 
 #include <X11/Xatom.h>
 #include <X11/Xlib.h>

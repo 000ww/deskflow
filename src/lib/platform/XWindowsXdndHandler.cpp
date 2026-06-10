@@ -10,6 +10,11 @@
 #include "deskflow/FileTransferManager.h"
 #include "platform/XWindowsScreen.h"
 
+// XWindowsScreen.h re-includes X11/Xlib.h which redefines CursorShape
+#ifdef CursorShape
+#undef CursorShape
+#endif
+
 #include <X11/Xatom.h>
 #include <algorithm>
 #include <sstream>

@@ -68,33 +68,6 @@ jobs:
         run: cmake --build build --config Release -j $env:NUMBER_OF_PROCESSORS
         shell: pwsh
 
-      - name: Find and copy OpenSSL DLLs
-        run: |
-          $opensslDlls = @(
-            "C:\Program Files\OpenSSL\bin\libcrypto-3-x64.dll",
-            "C:\Program Files\OpenSSL\bin\libssl-3-x64.dll",
-            "C:\Program Files\OpenSSL-Win64\bin\libcrypto-3-x64.dll",
-            "C:\Program Files\OpenSSL-Win64\bin\libssl-3-x64.dll"
-          )
-          $releaseDirs = @(
-            "build\bin\Release",
-            "build\src\apps\deskflow-core\Release",
-            "build\src\apps\deskflow-daemon\Release"
-          )
-          foreach ($dll in $opensslDlls) {
-            if (Test-Path $dll) {
-              Write-Host "Found OpenSSL DLL: $dll"
-              foreach ($dir in $releaseDirs) {
-                if (Test-Path $dir) {
-                  Copy-Item $dll $dir
-                  Write-Host "Copied to $dir"
-                }
-              }
-              break
-            }
-          }
-        shell: pwsh
-
       - name: Create 7Z package
         run: cpack -G 7Z -C Release
         shell: pwsh

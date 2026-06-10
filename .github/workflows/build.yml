@@ -11,8 +11,8 @@ on:
   workflow_dispatch:
 
 env:
-  QT_VERSION_LINUX: "6.7.2"
   QT_VERSION: "6.7.0"
+  QT_VERSION_LINUX: "6.8.0"
 
 jobs:
   # ============================================================
@@ -189,7 +189,6 @@ jobs:
   build-linux:
     name: Linux x64
     runs-on: ubuntu-latest
-    continue-on-error: true
 
     steps:
       - name: Checkout
@@ -224,7 +223,6 @@ jobs:
           cmake -S . -B build \
             -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_CXX_FLAGS="-fpermissive" \
             -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR" \
             -DQt6_DIR="$Qt6_DIR" \
             -DBUILD_TESTS=OFF \
@@ -257,7 +255,7 @@ jobs:
   # ============================================================
   release:
     name: Create Release
-    needs: [ build-windows-x64, build-macos ]
+    needs: [ build-windows-x64, build-macos, build-linux ]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
 

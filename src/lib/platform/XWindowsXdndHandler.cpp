@@ -42,16 +42,16 @@ XWindowsXdndHandler::XWindowsXdndHandler(Display *display, Window window, XWindo
       m_hasUriList(false),
       m_dropAccepted(false)
 {
-  m_xdndEnter = XInternAtom(m_display, "XdndEnter", False);
-  m_xdndPosition = XInternAtom(m_display, "XdndPosition", False);
-  m_xdndLeave = XInternAtom(m_display, "XdndLeave", False);
-  m_xdndDrop = XInternAtom(m_display, "XdndDrop", False);
-  m_xdndStatus = XInternAtom(m_display, "XdndStatus", False);
-  m_xdndFinished = XInternAtom(m_display, "XdndFinished", False);
-  m_xdndAware = XInternAtom(m_display, "XdndAware", False);
-  m_xdndActionCopy = XInternAtom(m_display, "XdndActionCopy", False);
-  m_uriListAtom = XInternAtom(m_display, "text/uri-list", False);
-  m_textPlainAtom = XInternAtom(m_display, "text/plain", False);
+  m_xdndEnter = XInternAtom(m_display, "XdndEnter", false);
+  m_xdndPosition = XInternAtom(m_display, "XdndPosition", false);
+  m_xdndLeave = XInternAtom(m_display, "XdndLeave", false);
+  m_xdndDrop = XInternAtom(m_display, "XdndDrop", false);
+  m_xdndStatus = XInternAtom(m_display, "XdndStatus", false);
+  m_xdndFinished = XInternAtom(m_display, "XdndFinished", false);
+  m_xdndAware = XInternAtom(m_display, "XdndAware", false);
+  m_xdndActionCopy = XInternAtom(m_display, "XdndActionCopy", false);
+  m_uriListAtom = XInternAtom(m_display, "text/uri-list", false);
+  m_textPlainAtom = XInternAtom(m_display, "text/plain", false);
 
   // Register window as Xdnd-aware
   Atom version = 5;
@@ -80,7 +80,7 @@ bool XWindowsXdndHandler::handleClientMessage(const XClientMessageEvent &event)
 
 bool XWindowsXdndHandler::handleSelectionNotify(const XSelectionEvent &event)
 {
-  if (event.selection == XInternAtom(m_display, "XdndSelection", False) && event.property == m_uriListAtom) {
+  if (event.selection == XInternAtom(m_display, "XdndSelection", false) && event.property == m_uriListAtom) {
     Atom actualType;
     int actualFormat;
     unsigned long itemCount;
@@ -88,7 +88,7 @@ bool XWindowsXdndHandler::handleSelectionNotify(const XSelectionEvent &event)
     unsigned char *data = nullptr;
 
     if (XGetWindowProperty(
-            m_display, m_window, m_uriListAtom, 0, 65536, True, AnyPropertyType, &actualType, &actualFormat,
+            m_display, m_window, m_uriListAtom, 0, 65536, true, AnyPropertyType, &actualType, &actualFormat,
             &itemCount, &bytesAfter, &data
         ) == Success &&
         data) {
@@ -129,7 +129,7 @@ void XWindowsXdndHandler::handleXdndEnter(const XClientMessageEvent &event)
     unsigned char *data = nullptr;
 
     if (XGetWindowProperty(
-            m_display, m_sourceWindow, XInternAtom(m_display, "XdndTypeList", False), 0, 65536, False, XA_ATOM,
+            m_display, m_sourceWindow, XInternAtom(m_display, "XdndTypeList", false), 0, 65536, false, XA_ATOM,
             &actualType, &actualFormat, &itemCount, &bytesAfter, &data
         ) == Success &&
         data) {
@@ -175,7 +175,7 @@ void XWindowsXdndHandler::sendXdndStatus(Window sourceWindow, bool accept)
   XClientMessageEvent status;
   status.type = ClientMessage;
   status.serial = 0;
-  status.send_event = True;
+  status.send_event = true;
   status.display = m_display;
   status.window = sourceWindow;
   status.message_type = m_xdndStatus;
@@ -186,7 +186,7 @@ void XWindowsXdndHandler::sendXdndStatus(Window sourceWindow, bool accept)
   status.data.l[3] = 0;
   status.data.l[4] = accept ? m_xdndActionCopy : None;
 
-  XSendEvent(m_display, sourceWindow, False, NoEventMask, reinterpret_cast<XEvent *>(&status));
+  XSendEvent(m_display, sourceWindow, false, NoEventMask, reinterpret_cast<XEvent *>(&status));
   XFlush(m_display);
 }
 
@@ -195,7 +195,7 @@ void XWindowsXdndHandler::sendXdndFinished(Window sourceWindow, bool accept)
   XClientMessageEvent finished;
   finished.type = ClientMessage;
   finished.serial = 0;
-  finished.send_event = True;
+  finished.send_event = true;
   finished.display = m_display;
   finished.window = sourceWindow;
   finished.message_type = m_xdndFinished;
@@ -204,7 +204,7 @@ void XWindowsXdndHandler::sendXdndFinished(Window sourceWindow, bool accept)
   finished.data.l[1] = accept ? 1 : 0;
   finished.data.l[2] = accept ? m_xdndActionCopy : None;
 
-  XSendEvent(m_display, sourceWindow, False, NoEventMask, reinterpret_cast<XEvent *>(&finished));
+  XSendEvent(m_display, sourceWindow, false, NoEventMask, reinterpret_cast<XEvent *>(&finished));
   XFlush(m_display);
 
   m_dragActive = false;
@@ -214,7 +214,7 @@ void XWindowsXdndHandler::sendXdndFinished(Window sourceWindow, bool accept)
 
 void XWindowsXdndHandler::requestDropData()
 {
-  XConvertSelection(m_display, XInternAtom(m_display, "XdndSelection", False), m_uriListAtom, m_uriListAtom, m_window, CurrentTime);
+  XConvertSelection(m_display, XInternAtom(m_display, "XdndSelection", false), m_uriListAtom, m_uriListAtom, m_window, CurrentTime);
   XFlush(m_display);
 }
 
